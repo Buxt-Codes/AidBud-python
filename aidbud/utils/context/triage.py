@@ -1,3 +1,5 @@
+from typing import Dict
+
 class TriageContext:
     def __init__(self):
         self.enabled = False

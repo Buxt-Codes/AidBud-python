@@ -10,7 +10,7 @@ class Embedder:
         self.embedding_model = SentenceTransformer(config.rag["embedder"])
         self.tokenizer = tiktoken.get_encoding(config.rag["tokeniser"])
         self.max_token_length = config.rag["embedder_max_tokens"]
-        print(f"Initialised embedding model: {config.rag["embedder"]} (max_tokens={self.max_token_length})")
+        print(f"Initialised embedding model: {config.rag['embedder']} (max_tokens={self.max_token_length})")
 
     def _chunk_text(self, text: str, max_tokens: int = -1, overlap: int = 50) -> List[str]:
         if max_tokens == -1:
@@ -30,30 +30,36 @@ class Embedder:
     def _chunk_response(self, response: Dict[str, str], max_tokens: int = -1, overlap: int = 50) -> List[str]:
         if max_tokens == -1:
             max_tokens = self.max_token_length
-        query_tokens = self.tokenizer.encode(response["query"])
-        response_tokens = self.tokenizer.encode(response["response"])
-        pcard_changes_tokens = self.tokenizer.encode(response["pcard_changes"])
 
-        if len(query_tokens) + len(response_tokens) + len(pcard_changes_tokens) <= max_tokens:
+        query_tokens = response_tokens = pcard_tokens = []
+        query_tokens = self.tokenizer.encode(response["query"])
+        if response.get("response"):
+            response_tokens = self.tokenizer.encode(response["response"])
+        if response.get("pcard"):
+            pcard_tokens = self.tokenizer.encode(response["pcard"])
+
+        if len(query_tokens) + len(response_tokens) + len(pcard_tokens) <= max_tokens:
             return [str(response)]
 
         chunks = []
 
-        response_chunks = []
-        for i in range(0, len(response_tokens), max_tokens - len(query_tokens) - 50 - overlap):
-            chunk_tokens = response_tokens[i:i + max_tokens - len(query_tokens) - 50]
-            chunk_text = self.tokenizer.decode(chunk_tokens)
-            response_chunks.append(chunk_text)
-        for response in response_chunks:
-            chunks.append(str({"query": response["query"], "response": response}))
+        if response.get("response"):
+            response_chunks = []
+            for i in range(0, len(response_tokens), max_tokens - len(query_tokens) - 50 - overlap):
+                chunk_tokens = response_tokens[i:i + max_tokens - len(query_tokens) - 50]
+                chunk_text = self.tokenizer.decode(chunk_tokens)
+                response_chunks.append(chunk_text)
+            for response_chunk in response_chunks:
+                chunks.append(str({"query": response["query"], "response": response_chunk}))
         
-        pcard_changes_chunks = []
-        for i in range(0, len(pcard_changes_tokens), max_tokens - len(query_tokens) - 50 - overlap):
-            chunk_tokens = pcard_changes_tokens[i:i + max_tokens - len(query_tokens) - 50]
-            chunk_text = self.tokenizer.decode(chunk_tokens)
-            pcard_changes_chunks.append(chunk_text)
-        for pcard_changes in pcard_changes_chunks:
-            chunks.append(str({"query": response["query"], "pcard_changes": pcard_changes}))
+        if response.get("pcard"):
+            pcard_chunks = []
+            for i in range(0, len(pcard_tokens), max_tokens - len(query_tokens) - 50 - overlap):
+                chunk_tokens = pcard_tokens[i:i + max_tokens - len(query_tokens) - 50]
+                chunk_text = self.tokenizer.decode(chunk_tokens)
+                pcard_chunks.append(chunk_text)
+            for pcard in pcard_chunks:
+                chunks.append(str({"query": response["query"], "pcard": pcard}))
         
         return chunks
     

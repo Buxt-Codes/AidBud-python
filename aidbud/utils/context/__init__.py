@@ -1,5 +1,3 @@
-from currentsituation import CurrentSituationContext
-from firstaidavail import FirstAidAvailableContext
-from triage import TriageContext
+from .context import Context
 
-__all__ = ["CurrentSituationContext", "FirstAidAvailableContext", "TriageContext"]
+__all__ = ["Context"]

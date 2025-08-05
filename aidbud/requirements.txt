@@ -1,0 +1,13 @@
+torch
+timm
+opencv-python
+numpy
+soundfile
+Pillow
+requests
+tiktoken
+sentence-transformers
+chromadb
+moviepy
+jsonfinder
+accelerate

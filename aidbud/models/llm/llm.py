@@ -6,7 +6,6 @@ import requests
 import torch
 import cv2
 import numpy as np
-import soundfile as sf
 from PIL import Image
 from typing import List, Dict, Any, Tuple, Union
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -46,11 +45,12 @@ except ImportError:
 
 
 class LLM:
-    def __init__(self, model_id: str = "google/gemma-3n-E4B-it", config: Config = Config()):
+    def __init__(self, config: Config = Config()):
         if AutoProcessor is None or AutoModelForImageTextToText is None:
             raise RuntimeError("Hugging Face `transformers` library not found. Cannot initialize.")
 
-        self.model_id = model_id
+        self.config = config
+        self.model_id = self.config.llm["model_id"]
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
         print(f"Loading model '{self.model_id}' on device: {self.device}...")
@@ -63,8 +63,8 @@ class LLM:
         )
         print("Model loaded successfully.")
         
-        self.fps = config.llm["fps"]
-        self.max_workers = config.llm["num_workers"] if config.llm["num_workers"] is not None else os.cpu_count()
+        self.fps = self.config.llm["fps"]
+        self.max_workers = self.config.llm["num_workers"] if self.config.llm["num_workers"] is not None else os.cpu_count()
 
         self.image_processing = True
         self.video_processing = True
@@ -313,4 +313,14 @@ class LLM:
         )
 
         response_text = self.processor.batch_decode(outputs, skip_special_tokens=True)
-        return response_text[0].strip()
+        raw_response = response_text[0].strip()
+
+        prompt_length = len(prompt) +len("user\n")
+        idx = raw_response.find("model\n", prompt_length)
+
+        if idx != -1:
+            model_response = raw_response[idx + len("model\n"):].strip()
+        else:
+            model_response = raw_response[prompt_length:].strip()
+
+        return model_response

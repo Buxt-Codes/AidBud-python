@@ -5,9 +5,8 @@ Your task is to carefully analyze all attachments and, if provided, consider the
 
 **The output must be in the exact JSON format below, with a single key `"description"` whose value is the description text:**
 
-```json
 {"description": "Your detailed description goes here."}
-```
+
 This description should include:
 
 -The nature and visible characteristics of any injuries shown in images or videos (e.g., type, severity, location).

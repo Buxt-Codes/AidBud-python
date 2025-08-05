@@ -1,5 +1,5 @@
-from models.embedder.embedder import Embedder
-from config import Config
+from ...models import Embedder
+from ...config import Config
 import os
 import tiktoken
 from typing import List, Dict, Union, Any, Tuple
@@ -76,7 +76,6 @@ class RAG:
                 "document": result["documents"][0],
                 "metadata": result["metadatas"][0]
             }
-
         return {}
     
     def get_attachment(self, attachment_id: int) -> Dict[str, Any]:
@@ -87,7 +86,6 @@ class RAG:
                 "document": result["documents"][0],
                 "metadata": result["metadatas"][0]
             }
-
         return {}
 
     def retrieve_responses(self, query: str, conversation_id: int, k: int = 5) -> Tuple[List[str], List[str]]:
