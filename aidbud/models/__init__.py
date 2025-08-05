@@ -1,4 +1,4 @@
-from .embedder.embedder import Embedder
-from .llm.llm import LLM
+from .embedder import Embedder
+from .llm import LLM
 
 __all__ = ["Embedder", "LLM"]
