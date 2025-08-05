@@ -89,6 +89,18 @@ class RAG:
         return {}
 
     def retrieve_responses(self, query: str, conversation_id: int, k: int = 5) -> Tuple[List[str], List[str]]:
+        if not query:
+            result = self.response_collection.get(
+                where={"conversation_id": conversation_id},
+                limit=k
+            )
+            ids_raw = result.get("ids") or []
+            ids = [str(i) for i in ids_raw]
+            nested_documents = result.get("documents") or []
+            flat_documents = [doc for sublist in nested_documents for doc in (sublist if isinstance(sublist, list) else [sublist])]
+            documents = [doc if isinstance(doc, str) else str(doc) for doc in flat_documents]
+            return ids, documents
+
         query_embeddings, query_chunks = self.embedder.embed(query)
         result = self.response_collection.query(
             query_embeddings=query_embeddings[0],
@@ -106,6 +118,18 @@ class RAG:
         return ids, documents
 
     def retrieve_attachments(self, query: str, conversation_id: int, k: int = 5) -> Tuple[List[str], List[str]]:
+        if not query:
+            result = self.attachment_collection.get(
+                where={"conversation_id": conversation_id},
+                limit=k
+            )
+            ids_raw = result.get("ids") or []
+            ids = [str(i) for i in ids_raw]
+            nested_documents = result.get("documents") or []
+            flat_documents = [doc for sublist in nested_documents for doc in (sublist if isinstance(sublist, list) else [sublist])]
+            documents = [doc if isinstance(doc, str) else str(doc) for doc in flat_documents]
+            return ids, documents
+
         query_embeddings, query_chunks = self.embedder.embed(query)
         result = self.attachment_collection.query(
             query_embeddings=query_embeddings[0],
@@ -125,3 +149,21 @@ class RAG:
     def delete_conversation(self, conversation_id: int):
         self.response_collection.delete(where={"conversation_id": conversation_id})
         self.attachment_collection.delete(where={"conversation_id": conversation_id})
+
+    def reset_collections(self):
+        try:
+            self.chroma_client.delete_collection("text_queries")
+        except Exception:
+            pass  
+
+        try:
+            self.chroma_client.delete_collection("attachment_queries")
+        except Exception:
+            pass  
+
+        self.response_collection = self.chroma_client.get_or_create_collection(
+            name="text_queries"
+        )
+        self.attachment_collection = self.chroma_client.get_or_create_collection(
+            name="attachment_queries"
+        )

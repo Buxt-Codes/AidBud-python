@@ -56,7 +56,7 @@ class Parser:
         first_block = pcalls[0]
 
         for match in jsonfinder(first_block):
-            new_response = pcard_pattern.sub("[EDITED PATIENT CARD]", response)
+            new_response = pcard_pattern.sub("**Edited Patient Card**", response)
             return match.value, new_response
         
         return None, response

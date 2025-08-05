@@ -6,6 +6,8 @@ from typing import List, Dict, Any, Tuple
 from urllib.parse import urlparse
 import mimetypes
 import ast
+import os
+import requests
 
 class Workflow:
     def __init__(self, context: Context, config: Config = Config()):
@@ -15,27 +17,43 @@ class Workflow:
         self.prompt_builder = PromptBuilder(context)
         self.parser = Parser()
     
-    def _classify_attachments(self, attachment_paths: List[str]) -> Tuple[List[str], List[str], List[str]]:
+    def classify_attachments(attachment_paths: List[str]) -> Tuple[List[str], List[str], List[str]]:
         image_paths = []
         video_paths = []
         audio_paths = []
 
         for path in attachment_paths:
             parsed = urlparse(path)
-            if parsed.scheme in ["http", "https"]:
-                mime_type, _ = mimetypes.guess_type(parsed.path)
+            is_url = parsed.scheme in ["http", "https"]
+
+            if is_url:
+                try:
+                    response = requests.head(path, allow_redirects=True, timeout=5)
+                    if response.status_code >= 400:
+                        print(f"[SKIPPED] URL does not exist or is inaccessible: {path}")
+                        continue
+                except requests.RequestException:
+                    print(f"[SKIPPED] Failed to check URL: {path}")
+                    continue
             else:
-                mime_type, _ = mimetypes.guess_type(path)
+                if not os.path.exists(path):
+                    print(f"[SKIPPED] File does not exist: {path}")
+                    continue
 
+            mime_type, _ = mimetypes.guess_type(parsed.path if is_url else path)
             if mime_type is None:
-                continue  
+                print(f"[SKIPPED] Unknown MIME type: {path}")
+                continue
 
+            # Classify by MIME type
             if mime_type.startswith("image/"):
                 image_paths.append(path)
             elif mime_type.startswith("video/"):
                 video_paths.append(path)
             elif mime_type.startswith("audio/"):
                 audio_paths.append(path)
+            else:
+                print(f"[SKIPPED] Unsupported MIME type: {mime_type} - {path}")
 
         return image_paths, video_paths, audio_paths
     
@@ -121,7 +139,7 @@ class Workflow:
         if attachment_data:
             attachment_paths = ast.literal_eval(attachment_data["metadata"]["paths"])
             attachment_description = attachment_data["document"]
-            image_paths, video_paths, audio_paths = self._classify_attachments(attachment_paths)
+            image_paths, video_paths, audio_paths = self.classify_attachments(attachment_paths)
             prompt = self.prompt_builder.function_prompt(query, attachment_description, conversation_context, attachment_context)
             response = self.llm.generate(prompt, image_paths, video_paths, audio_paths)
             parsed_response = self.parser.parse_response(response, find_function=False)
@@ -185,7 +203,7 @@ class Workflow:
 
     def _attachment_processing(self, conversation_id: int, query: str, attachment_paths: List[str] = None):
         if attachment_paths:
-            image_paths, video_paths, audio_paths = self._classify_attachments(attachment_paths)
+            image_paths, video_paths, audio_paths = self.classify_attachments(attachment_paths)
             prompt = self.prompt_builder.attachment_prompt(query)
             response = self.llm.generate(prompt, image_paths, video_paths, audio_paths)
             description = self.parser.parse_attachment_response(response)
