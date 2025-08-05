@@ -11,3 +11,8 @@ chromadb
 moviepy
 jsonfinder
 accelerate
+ipython
+ipykernel
+jupyter
+notebook
+ipywidgets
