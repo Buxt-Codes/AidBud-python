@@ -67,7 +67,7 @@ Expected output:
 “INJURY IDENTIFICATION”: “Deep Abrasion”,
 “INJURY DESCRIPTION”: “An abrasion is a partial thickness wound caused by damage to the skin.”,
 “PATIENT DESCRIPTION”: “The patient has a deep abrasion on his left elbow with minor bleeding.”,
-“INTERVENTION PLAN”: “1. Rinse with clean water\n2. Disinfect with alcohol swab\n3. Cover with a sterile plaster\nDoctor needed: no”
+“INTERVENTION PLAN”: “1. Rinse with clean water\n2. Disinfect with alcohol swab\n3. Cover with a sterile plaster”
 }
 [/PCARD]
 #### Example 2 — Attachment Analysis
