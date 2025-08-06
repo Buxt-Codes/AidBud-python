@@ -105,7 +105,6 @@ class LLM:
                 img = Image.open(path)
             return img
         except Exception as e:
-            print(f"Warning: Could not process image at {path}. Error: {e}.")
             return None
     
     def _prepare_video(self, video_path: str) -> Tuple[List[Image.Image], Union[np.ndarray, None]]:
@@ -114,7 +113,6 @@ class LLM:
         
         if video_path.startswith("http://") or video_path.startswith("https://"):
             try:
-                print(f"Downloading video from URL: {video_path}")
                 response = requests.get(video_path, stream=True)
                 response.raise_for_status() 
             
@@ -122,7 +120,6 @@ class LLM:
                     for chunk in response.iter_content(chunk_size=8192):
                         temp_file.write(chunk)
                     temp_file_path = temp_file.name
-                    print(f"Video downloaded to temporary file: {temp_file_path}")
 
                 video_reader = cv2.VideoCapture(temp_file_path)
                 if not video_reader.isOpened():
@@ -196,11 +193,16 @@ class LLM:
                 try:
                     video_clip = VideoFileClip(video_path)
                     audio_clip = video_clip.audio
-                    audio_buffer = io.BytesIO()
-                    audio_clip.write_audiofile(audio_buffer, codec='pcm_s16le', fps=44100, logger=None)
-                    audio_buffer.seek(0)
-                    
-                    audio_data, _ = sf.read(audio_buffer, dtype='float32')
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as audio_temp_file:
+                        audio_temp_path = audio_temp_file.name
+
+                    audio_clip.write_audiofile(audio_temp_path, codec='pcm_s16le', fps=44100, logger=None)
+                    audio_data, _ = sf.read(audio_temp_path, dtype='float32')
+
+                    if audio_data.ndim > 1:
+                        audio_data = audio_data.mean(axis=1)
+
+                    os.remove(audio_temp_path)
                     if audio_data.ndim > 1:
                         audio_data = audio_data.mean(axis=1) 
                     audio = audio_data
@@ -315,7 +317,7 @@ class LLM:
         response_text = self.processor.batch_decode(outputs, skip_special_tokens=True)
         raw_response = response_text[0].strip()
 
-        prompt_length = len(prompt) +len("user\n")
+        prompt_length = len(prompt) +len("user\n") -1
         idx = raw_response.find("model\n", prompt_length)
 
         if idx != -1:

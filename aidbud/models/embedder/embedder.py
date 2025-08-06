@@ -32,11 +32,11 @@ class Embedder:
             max_tokens = self.max_token_length
 
         query_tokens = response_tokens = pcard_tokens = []
-        query_tokens = self.tokenizer.encode(response["query"])
+        query_tokens = self.tokenizer.encode(str(response["query"]))
         if response.get("response"):
-            response_tokens = self.tokenizer.encode(response["response"])
+            response_tokens = self.tokenizer.encode(str(response["response"]))
         if response.get("pcard"):
-            pcard_tokens = self.tokenizer.encode(response["pcard"])
+            pcard_tokens = self.tokenizer.encode(str(response["pcard"]))
 
         if len(query_tokens) + len(response_tokens) + len(pcard_tokens) <= max_tokens:
             return [str(response)]
@@ -66,7 +66,7 @@ class Embedder:
     def _chunk_attachment(self, attachment: Dict[str, Any], max_tokens: int = -1, overlap: int = 50) -> List[str]:
         if max_tokens == -1:
             max_tokens = self.max_token_length
-        description_tokens = self.tokenizer.encode(attachment["description"])
+        description_tokens = self.tokenizer.encode(str(attachment["description"]))
 
         if len(description_tokens) <= max_tokens:
             return [self.tokenizer.decode(description_tokens)]

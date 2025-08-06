@@ -1,7 +1,7 @@
 class CurrentSituationContext:
     def __init__(self):
         self.enabled = False
-        self.current_situation = ""
+        self.situation = ""
     
     def set_situation(self, situation: str):
         self.situation = situation

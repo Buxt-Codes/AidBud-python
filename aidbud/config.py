@@ -4,6 +4,7 @@ class Config:
         self.llm = {}
         self.llm["fps"] = 1
         self.llm["num_workers"] = 4
+        self.llm["model_id"] = "google/gemma-3n-E4B-it"
         
         #========== RAG ==========#
         self.rag = {}
@@ -16,8 +17,3 @@ class Config:
         #========== CONTEXT ==========#
         self.context = {}
         self.context["context_path"] = "./context"
-
-        #========== LLM ==========#
-        self.llm = {}
-        self.llm["model_id"] = "google/gemma-3n-E4B-it"
-        

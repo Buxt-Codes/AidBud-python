@@ -26,9 +26,11 @@ class RAG:
     
     def insert_response(self, response: Dict[str, str], conversation_id: int):
         response_embeddings, response_chunks = self.embedder.embed_response(response)
+        if not response_embeddings:
+            raise ValueError("No embeddings generated for the provided response.")
         start_id = int(self._autonumber(self.response_collection))
         ids = [str(start_id + i) for i in range(len(response_embeddings))]
-        if all(response_embeddings):
+        if response_embeddings:
             self.response_collection.add(
                     embeddings=response_embeddings,
                     documents=response_chunks,
@@ -38,15 +40,40 @@ class RAG:
     
     def insert_attachment(self, attachment: Dict[str, Any], conversation_id: int):
         attachment_embeddings, attachment_chunks = self.embedder.embed_attachment(attachment)
+        if not attachment_embeddings:
+            raise ValueError("No embeddings generated for the provided attachment.")
         start_id = int(self._autonumber(self.attachment_collection))
         ids = [str(start_id + i) for i in range(len(attachment_embeddings))]
-        if all(attachment_embeddings):
+        if attachment_embeddings:
             self.attachment_collection.add(
                     embeddings=attachment_embeddings,
                     documents=attachment_chunks,
                     metadatas=[{"conversation_id": conversation_id, "paths": str(attachment["paths"])} for i in attachment_embeddings],
                     ids=ids
                 )
+
+    def update_attachment(self, attachment: Dict[str, Any], conversation_id: int):
+        attachment_embeddings, attachment_chunks = self.embedder.embed_attachment(attachment)
+        if not attachment_embeddings:
+            raise ValueError("No embeddings generated for the provided attachment.")
+        path_str = str(attachment.get("paths", ""))
+        self.attachment_collection.delete(
+            where={
+                "conversation_id": conversation_id,
+                "paths": path_str
+            }
+        )
+        start_id = int(self._autonumber(self.attachment_collection))
+        ids = [str(start_id + i) for i in range(len(attachment_embeddings))]
+        self.attachment_collection.add(
+            embeddings=attachment_embeddings,
+            documents=attachment_chunks,
+            metadatas=[{
+                "conversation_id": conversation_id,
+                "paths": path_str
+            } for _ in attachment_embeddings],
+            ids=ids
+        )
     
     def get_conversation_responses(self, conversation_id: int) -> Tuple[List[str], List[str]]:
         result = self.response_collection.get(
@@ -94,7 +121,7 @@ class RAG:
                 where={"conversation_id": conversation_id},
                 limit=k
             )
-            ids_raw = result.get("ids") or []
+            ids_raw = result.get("ids")[0] or []
             ids = [str(i) for i in ids_raw]
             nested_documents = result.get("documents") or []
             flat_documents = [doc for sublist in nested_documents for doc in (sublist if isinstance(sublist, list) else [sublist])]
@@ -109,7 +136,7 @@ class RAG:
                 "conversation_id": conversation_id
             }
         )
-        ids_raw = result.get("ids") or []
+        ids_raw = result.get("ids")[0] or []
         ids = [str(i) for i in ids_raw]
         nested_documents = result.get("documents") or []
         flat_documents = [doc for sublist in nested_documents for doc in (sublist if isinstance(sublist, list) else [sublist])]
@@ -123,7 +150,7 @@ class RAG:
                 where={"conversation_id": conversation_id},
                 limit=k
             )
-            ids_raw = result.get("ids") or []
+            ids_raw = result.get("ids")[0] or []
             ids = [str(i) for i in ids_raw]
             nested_documents = result.get("documents") or []
             flat_documents = [doc for sublist in nested_documents for doc in (sublist if isinstance(sublist, list) else [sublist])]
@@ -138,7 +165,7 @@ class RAG:
                 "conversation_id": conversation_id
             }
         )
-        ids_raw = result.get("ids") or []
+        ids_raw = result.get("ids")[0] or []
         ids = [str(i) for i in ids_raw]
         nested_documents = result.get("documents") or []
         flat_documents = [doc for sublist in nested_documents for doc in (sublist if isinstance(sublist, list) else [sublist])]

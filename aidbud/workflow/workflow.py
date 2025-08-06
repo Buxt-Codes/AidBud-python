@@ -8,19 +8,28 @@ import mimetypes
 import ast
 import os
 import requests
+import os
+import tempfile
+import urllib.request
+from typing import List
+from moviepy import VideoFileClip, AudioFileClip
 
 class Workflow:
     def __init__(self, context: Context, config: Config = Config()):
+        self.config = config
         self.context = context
         self.llm = LLM(config)
         self.rag = RAG(config)
         self.prompt_builder = PromptBuilder(context)
         self.parser = Parser()
     
-    def classify_attachments(attachment_paths: List[str]) -> Tuple[List[str], List[str], List[str]]:
+    def classify_attachments(self, attachment_paths: List[str]) -> Tuple[List[str], List[str], List[str]]:
         image_paths = []
         video_paths = []
         audio_paths = []
+
+        if attachment_paths is None:
+            return image_paths, video_paths, audio_paths
 
         for path in attachment_paths:
             parsed = urlparse(path)
@@ -45,7 +54,6 @@ class Workflow:
                 print(f"[SKIPPED] Unknown MIME type: {path}")
                 continue
 
-            # Classify by MIME type
             if mime_type.startswith("image/"):
                 image_paths.append(path)
             elif mime_type.startswith("video/"):
@@ -60,8 +68,12 @@ class Workflow:
     def run(self, conversation_id: int, query: str, attachment_paths: List[str] = None):
         response_ids, response_contexts = self.rag.retrieve_responses(query, conversation_id, self.config.rag["topK"])
         attachment_ids, attachment_contexts = self.rag.retrieve_attachments(query, conversation_id, self.config.rag["topK"])
-        response_context = response_contexts
-        attachment_context = [str({"id": attachment_ids[i], "description": attachment_contexts[i]}) for i in range(len(attachment_ids))]
+        response_context = []
+        attachment_context = []
+        if response_contexts:
+            response_context = response_contexts
+        if attachment_contexts:
+            attachment_context = [str({"attachment id": attachment_ids[i], "description": attachment_contexts[i]}) for i in range(len(attachment_ids))]
 
         if attachment_paths:
             output = self._query(conversation_id, query, response_context, attachment_context, attachment_paths)
@@ -76,11 +88,11 @@ class Workflow:
             response_object["pcard"] = output["pcard"]
         if output.get("response"):
             response_object["response"] = output["response"]
-        self.rag.add_response(response_object, conversation_id)
+        self.rag.insert_response(response_object, conversation_id)
 
         return output
     
-    def _query(self, conversation_id: int, query: str, conversation_context: List[Dict[str, Any]], attachment_context: List[Dict[str, Any]], attachment_paths: List[str] = None):
+    def _query(self, conversation_id: int, query: str, conversation_context: List[str], attachment_context: List[str], attachment_paths: List[str] = None):
         if attachment_paths:
             attachment_description = self._attachment_processing(conversation_id, query, attachment_paths)
         else:
@@ -90,51 +102,47 @@ class Workflow:
         response = self.llm.generate(prompt)
         parsed_response = self.parser.parse_response(response, find_function=False)
 
-        output = {}
-        for response_data in parsed_response:
-            if response_data["type"] == "pcard":
-                pcard = response_data["context"]
-                validated_pcard = self._valid_pcard(pcard)
+        if parsed_response:
+            output = {}
+            response = parsed_response["context"].get("RESPONSE")
+            if isinstance(response, str):
+                output["response"] = response
+            pcard = parsed_response["context"]
+            validated_pcard = self._valid_pcard(pcard)
+            if isinstance(validated_pcard, dict):
                 output["pcard"] = validated_pcard
-            
-            if response_data["type"] == "response":
-                llm_response = response_data["response"]
-                output["response"] = llm_response
-
-        if validated_pcard:
             return output
         else:
             return {"error": "There was an error generating a response. Please try again."}
 
-    def _query_function(self, conversation_id: int, query: str, conversation_context: List[Dict[str, Any]], attachment_context: List[Dict[str, Any]]):
+    def _query_function(self, conversation_id: int, query: str, conversation_context: List[str], attachment_context: List[str]):
         prompt = self.prompt_builder.query_function_prompt(query, conversation_context, attachment_context)
         response = self.llm.generate(prompt)
         parsed_response = self.parser.parse_response(response, find_function=True)
 
-        output = {}
-        for response_data in parsed_response:
-            if response_data["type"] == "fcall":
-                fcall = response_data["context"]
+        if parsed_response:
+            if parsed_response.get("type") == "fcall":
+                fcall = parsed_response["context"]
                 validated_fcall = self._valid_fcall(fcall)
                 if validated_fcall:
                     return self._function(conversation_id, query, validated_fcall, conversation_context, attachment_context)
                 else:
                     return self._query(conversation_id, query, conversation_context, attachment_context)
 
-            if response_data["type"] == "pcard":
-                pcard = response_data["context"]
+            elif parsed_response.get("type") == "response":
+                output = {}
+                response = parsed_response["context"].get("RESPONSE")
+                if isinstance(response, str):
+                    output["response"] = response
+                pcard = parsed_response["context"]
                 validated_pcard = self._valid_pcard(pcard)
-                output["pcard"] = validated_pcard
+                if isinstance(validated_pcard, dict):
+                    output["pcard"] = validated_pcard
+                return output
             
-            if response_data["type"] == "response":
-                llm_response = response_data["response"]
-                output["response"] = llm_response
-        
-        if validated_pcard:
-            return output
         return {"error": "There was an error generating a response. Please try again."}
 
-    def _function(self, conversation_id, int, query: str, fcall: Dict[str, Any], conversation_context: List[Dict[str, Any]], attachment_context: List[Dict[str, Any]]):
+    def _function(self, conversation_id: int, query: str, fcall: Dict[str, Any], conversation_context: List[str], attachment_context: List[str]):
         attachment_data = self.rag.get_attachment(fcall["id"])
         if attachment_data:
             attachment_paths = ast.literal_eval(attachment_data["metadata"]["paths"])
@@ -144,41 +152,42 @@ class Workflow:
             response = self.llm.generate(prompt, image_paths, video_paths, audio_paths)
             parsed_response = self.parser.parse_response(response, find_function=False)
 
-            output = {}
-            for response_data in parsed_response:
-                if response_data["type"] == "pcard":
-                    pcard = response_data["context"]
-                    validated_pcard = self._valid_pcard(pcard)
+            if parsed_response:
+                output = {}
+                response = parsed_response["context"].get("RESPONSE")
+                if isinstance(response, str):
+                    output["response"] = response
+                pcard = parsed_response["context"]
+                validated_pcard = self._valid_pcard(pcard)
+                if isinstance(validated_pcard, dict):
                     output["pcard"] = validated_pcard
-                
-                if response_data["type"] == "response":
-                    llm_response = response_data["response"]
-                    output["response"] = llm_response
-
-            if validated_pcard:
+                    if validated_pcard.get("ATTACHMENT"):
+                        attachment_data = {"description": validated_pcard.get("ATTACHMENT"), "paths": attachment_paths}
+                        self.rag.update_attachment(attachment_data, conversation_id)
+                        del validated_pcard["ATTACHMENT"]
                 return output
-            return {"error": "There was an error generating a response. Please try again."}
+            else:
+                return {"error": "There was an error generating a response. Please try again."}
 
         else:
             return self._query(conversation_id, query, conversation_context, attachment_context)
 
 
     def _valid_pcard(self, pcard: Dict[str, Any]) -> Dict[str, Any]:
-        if pcard["type"] == "pcard":
-            fields = {
-                "TRIAGE": pcard.get("TRIAGE"),
-                "IDENTIFIED_INJURY": pcard.get("IDENTIFIED_INJURY"),
-                "IDENTIFIED_INJURY_DESCRIPTION": pcard.get("IDENTIFIED_INJURY_DESCRIPTION"),
-                "PATIENT_INJURY_DESCRIPTION": pcard.get("PATIENT_INJURY_DESCRIPTION"),
-                "INTERVENTION_PLAN": pcard.get("INTERVENTION_PLAN"),
-                "ATTACHMENT": pcard.get("ATTACHMENT")
-            }
-            validated_pcard = {}
-            for field, value in fields.items():
-                if isinstance(value, str):
-                    validated_pcard[field] = value
-            if validated_pcard:
-                return validated_pcard
+        fields = {
+            "TRIAGE": pcard.get("TRIAGE"),
+            "INJURY IDENTIFICATION": pcard.get("INJURY IDENTIFICATION"),
+            "INJURY DESCRIPTION": pcard.get("INJURY DESCRIPTION"),
+            "PATIENT DESCRIPTION": pcard.get("PATIENT DESCRIPTION"),
+            "INTERVENTION PLAN": pcard.get("INTERVENTION PLAN"),
+            "ATTACHMENT": pcard.get("ATTACHMENT")
+        }
+        validated_pcard = {}
+        for field, value in fields.items():
+            if isinstance(value, str):
+                validated_pcard[field] = value
+        if validated_pcard:
+            return validated_pcard
         return None
     
     def _valid_fcall(self, fcall: Dict[str, Any]) -> Dict[str, Any]:
@@ -197,9 +206,6 @@ class Workflow:
             if len(validated_fcall) == 2:
                 return validated_fcall
         return None
-                    
-
-            
 
     def _attachment_processing(self, conversation_id: int, query: str, attachment_paths: List[str] = None):
         if attachment_paths:
