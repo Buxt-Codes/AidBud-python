@@ -84,6 +84,17 @@ class LLM:
             self.audio_processing = False
 
     def _prepare_prompt(self, prompt: str, images: List[Image.Image] = None, audios: List[np.ndarray] = None) -> List[Dict[str, Any]]:
+        """
+        Prepares a prompt for the LLM model by adding any given images and audio data to the prompt string.
+
+        Args:
+            prompt (str): The text prompt to generate a response for.
+            images (List[Image.Image], optional): A list of PIL Image objects to use as input. Defaults to None.
+            audios (List[np.ndarray], optional): A list of numpy arrays representing audio data to use as input. Defaults to None.
+
+        Returns:
+            List[Dict[str, Any]]: A list of dictionaries in the format expected by the LLM model.
+        """
         images = images if images is not None else []
         audios = audios if audios is not None else []
 
@@ -98,6 +109,15 @@ class LLM:
         return messages
     
     def _prepare_image(self, path: str) -> Image.Image:
+        """
+        Reads an image file from a given path and returns its contents as a PIL Image object.
+
+        Args:
+            path: The path or URL to the image file.
+
+        Returns:
+            A PIL Image object containing the image data, or None if the file could not be read.
+        """
         try:
             if path.startswith("http://") or path.startswith("https://"):
                 img = Image.open(requests.get(path, stream=True).raw)
@@ -108,6 +128,21 @@ class LLM:
             return None
     
     def _prepare_video(self, video_path: str) -> Tuple[List[Image.Image], Union[np.ndarray, None]]:
+        """
+        Prepares video frames and extracts audio from a given video path.
+
+        Args:
+            video_path (str): The path or URL to the video file.
+
+        Returns:
+            Tuple[List[Image.Image], Union[np.ndarray, None]]: A tuple containing a list of extracted 
+            video frames as PIL Image objects and the extracted audio data as a numpy array 
+            (or None if audio extraction is disabled or fails).
+            
+        This function manages both local and remote video files. It extracts frames at a rate specified 
+        by the instance's fps attribute and converts them to RGB images. If video_audio_processing is 
+        enabled, it also extracts audio from the video and returns it as a numpy array.
+        """
         images = []
         audio = None
         
@@ -214,6 +249,15 @@ class LLM:
         return images, audio
 
     def _prepare_audio(self, path: str) -> np.ndarray:
+        """
+        Reads an audio file from a given path and returns its audio data as a numpy array.
+
+        Args:
+            path: The path to the audio file to read.
+
+        Returns:
+            A numpy array containing the audio data, or None if the file could not be read.
+        """
         audio_data = None
         try:
             if path.startswith("http://") or path.startswith("https://"):
@@ -236,6 +280,18 @@ class LLM:
         video_paths: List[str] = None,
         audio_paths: List[str] = None
     ) -> str:
+        """
+        Generate a response based on the given prompt and optional multimedia inputs.
+
+        Args:
+        prompt: The text prompt to generate a response for.
+        image_paths: A list of paths to image files to use as input.
+        video_paths: A list of paths to video files to use as input.
+        audio_paths: A list of paths to audio files to use as input.
+
+        Returns:
+        A string containing the generated response.
+        """
         image_paths = image_paths if image_paths is not None else []
         video_paths = video_paths if video_paths is not None else []
         audio_paths = audio_paths if audio_paths is not None else []
